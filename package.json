@@ -1,0 +1,23 @@
+{
+  "name": "@teamhusky/husky-accloner",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Christian-Lemos/HuskyACCloner.git"
+  },
+  "author": "Team Husky",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Christian-Lemos/HuskyACCloner/issues"
+  },
+  "homepage": "https://github.com/Christian-Lemos/HuskyACCloner#readme",
+  "dependencies": {
+    "ip": "^1.1.5",
+    "mongoose": "^5.5.11"
+  }
+}
