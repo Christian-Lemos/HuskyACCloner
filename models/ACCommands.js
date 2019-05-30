@@ -20,8 +20,8 @@ let command = new mongoose.Schema({
     temperatures : [temperature]
 })
 
-let acModel = new mongoose.Schema({
-    acModel: {
+let ACSchema = new mongoose.Schema({
+    name: {
         type : String,
         unique : true,
         required : true,        
@@ -39,13 +39,18 @@ let acModel = new mongoose.Schema({
   * @typedef Command
   * @property {Number} mode
   * @property {Array.<Temperature>} temperatures
-  * @property {function} save
   */
 
 /**
  * @typedef ACDocument
- * @property {String} acModel
+ * @property {String} name
  * @property {Array.<Command>} commands
+ * @property {function} save
 */
 
-module.exports = mongoose.model("ac_commands", acModel);
+/**
+ * @type {ACDocument}
+ */
+let abc = {}
+
+module.exports = mongoose.model("ac_commands", ACSchema);
