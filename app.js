@@ -3,44 +3,20 @@ const ip = require('ip');
 const mongoose = require('mongoose');
 const lodash = require('lodash')
 
+
 const ACCommands = require('./models/ACCommands');
-
-
-/**
- * @callback OnReadyCallback
- */
-
-let server = new net.Server();
-
-/**
- * @type {net.Socket}
- */
-let irSocket = null;
-
-
-/**
- * @type {Number}
- */
-let currentMode = null;
-
-/**
- * @type {Number}
- */
-let currentTemperature = null;
 
 /**
  * Callback for listening observers
  * 
  * @callback OnListeningCallback
  * @param {Boolean} listening
- */
-
+*/
 /**
  * Callback for ready observers
  * 
  * @callback OnReadyCallback
- */
-
+*/
 /**
  * Callback for IR signal observers
  * 
@@ -49,39 +25,25 @@ let currentTemperature = null;
  * @param {Number} mode
  * @param {Number} output
  * @param {String} encodedSignal
- */
+*/
 
-
-/**
- * @type {Array<OnIRSignalCallback>}
- */
-let IRCallbacks = new Array();
-
-/**
- * @type {Array<OnReadyCallback>}
- */
-let ReadyCallbacks = new Array();
-
-/**
- * @type {Array<OnListeningCallback>}
- */
-let ListenCallbacks = new Array();
 
 /**
  * Calls all the IRCallbacks and removes nulls
+ * @param {ACCloner} cloner
  * @param {ACCommands.ACDocument} document 
  * @param {Number} mode 
  * @param {Number} output 
  * @param {String} encodedSignal 
  */
-function CallIRCallbacks(document, mode, output, encodedSignal)
+function CallIRCallbacks(cloner, document, mode, output, encodedSignal)
 {
-    lodash.remove(IRCallbacks, (callback) =>
+    lodash.remove(cloner.IRCallbacks, (callback) =>
     {
         callback == null;
     })
 
-    lodash.forEach(IRCallbacks, (callback) =>
+    lodash.forEach(cloner.IRCallbacks, (callback) =>
     {
         callback(document, mode, output, encodedSignal)
     })
@@ -89,15 +51,16 @@ function CallIRCallbacks(document, mode, output, encodedSignal)
 
 /**
  * Calls all ReadyCallbacks and removes nulls
+ * @param {ACCloner} cloner
  */
-function CallReadyCallbacks()
+function CallReadyCallbacks(cloner)
 {
-    lodash.remove(ReadyCallbacks, (callback) =>
+    lodash.remove(cloner.ReadyCallbacks, (callback) =>
     {
         callback == null;
     })
 
-    lodash.forEach(ReadyCallbacks, (callback) =>
+    lodash.forEach(cloner.ReadyCallbacks, (callback) =>
     {
         callback()
     })
@@ -105,16 +68,17 @@ function CallReadyCallbacks()
 
 /**
  * Call ListenCallbacks and removes nulls
+ * @param {ACCloner} cloner
  * @param {Boolean} listening 
  */
-function CallListenCallbacks(listening)
+function CallListenCallbacks(cloner, listening)
 {
-    lodash.remove(ListenCallbacks, (callback) =>
+    lodash.remove(cloner.ListenCallbacks, (callback) =>
     {
         callback == null;
     })
 
-    lodash.forEach(ListenCallbacks, (callback) =>
+    lodash.forEach(cloner.ListenCallbacks, (callback) =>
     {
         callback(listening)
     })
@@ -146,6 +110,39 @@ class ACCloner
          */
         this.currentModel = null;
 
+        /**
+         * @type {number}
+         */
+        this.currentMode = null;
+
+        /**
+         * @type {number}
+         */
+        this.currentTemperature = null;
+
+
+        this.server = new net.Server();
+
+        /**
+        * @type {net.Socket}
+        */
+        this.irSocket = null;
+
+
+        /**
+         * @type {Array.<OnIRSignalCallback>}
+        */
+        this.IRCallbacks = new Array();
+
+        /**
+         * @type {Array.<OnReadyCallback>}
+        */
+        this.ReadyCallbacks = new Array();
+
+        /**
+         * @type {Array.<OnListeningCallback>}
+        */
+        this.ListenCallbacks = new Array();
 
         mongoose.connect(mongoURI,
         {
@@ -155,17 +152,17 @@ class ACCloner
             pass: mongoPass
         }, () =>
         {
-            server.on('connection', (socket) =>
+            this.server.on('connection', (socket) =>
             {
-                if (!irSocket)
+                if (!this.irSocket)
                 {
-                    irSocket = socket;
+                    this.irSocket = socket;
 
                     socket.on('data', (buffer) =>
                     {
                         let irEncodedSignal = String(buffer);
 
-                        let update = currentMode != null && currentTemperature != null && this.currentModel != null;
+                        let update = this.currentMode != null && this.currentTemperature != null && this.currentModel != null;
                         if (update)
                         {
                             let command = lodash.find(this.currentModel.commands, (command) =>
@@ -177,7 +174,7 @@ class ACCloner
                             {
                                 let temperature = lodash.find(command.temperatures, (temperature) =>
                                 {
-                                    return temperature.output == currentTemperature
+                                    return temperature.output == this.currentTemperature
                                 });
 
                                 if (temperature != null)
@@ -188,7 +185,7 @@ class ACCloner
                                 {
                                     command.temperatures.push(
                                     {
-                                        output: currentTemperature,
+                                        output: this.currentTemperature,
                                         encodedSignal: irEncodedSignal
                                     });
                                 }
@@ -197,11 +194,11 @@ class ACCloner
                             {
                                 this.currentModel.commands.push(
                                 {
-                                    mode: currentMode,
+                                    mode: this.currentMode,
                                     temperatures: [
                                     {
                                         encodedSignal: irEncodedSignal,
-                                        output: currentTemperature
+                                        output: this.currentTemperature
                                     }]
                                 });
                             }
@@ -209,40 +206,40 @@ class ACCloner
                             this.SaveCurrentModel();
                         }
 
-                        CallIRCallbacks(this.currentModel, currentTemperature, currentTemperature, irEncodedSignal)
-
+                        CallIRCallbacks(this, this.currentModel, this.currentMode, this.currentTemperature, irEncodedSignal)
                         socket.write(String(update ? '1' : '0'));
                     });
                 }
                 else
                 {
                     socket.end();
-                }
-
-                server.on('listening', () =>
-                {
-                    CallListenCallbacks(true);
-                })
-
-                this.isReady = true;
-                CallReadyCallbacks();
+                }       
             });
+
+            this.isReady = true;
+            CallReadyCallbacks(this);
+            
         });
     }
 
     StartListening()
     {
-        server.listen(this.listeningPort, ip.address());
+        this.server.listen(this.listeningPort, ip.address());
+        this.server.on('listening', () =>
+        {
+           
+           CallListenCallbacks(this, true);
+        })
     }
 
     StopListening()
     {
-        if (irSocket)
+        if (this.irSocket)
         {
-            irSocket.end();
+            this.irSocket.end();
         }
-        server.close();
-        CallListenCallbacks(false);
+        this.server.close();
+        CallListenCallbacks(this, false);
     }
 
     /**
@@ -258,7 +255,7 @@ class ACCloner
         }
         else
         {
-            ReadyCallbacks.push(callback);
+            this.ReadyCallbacks.push(callback);
         }
     }
 
@@ -268,7 +265,7 @@ class ACCloner
      */
     OnListening(callback)
     {
-        ListenCallbacks.push(callback);
+        this.ListenCallbacks.push(callback);
     }
 
     /**
@@ -277,7 +274,7 @@ class ACCloner
      */
     OnIRSignal(callback)
     {
-        IRCallbacks.push(callback);
+        this.IRCallbacks.push(callback);
     }
 
     /**
@@ -329,21 +326,22 @@ class ACCloner
         return this.currentModel.save();
     }
 
-    SetModeAndTemperature(mode, temperature)
+    SetMode(mode)
     {
-
         if (typeof(mode) != 'number')
         {
             throw new Error("Mode must be a number.")
         }
+        this.currentMode= mode;
+    }
 
+    SetTemperature(temperature)
+    {
         if (typeof(temperature) != "number")
         {
             throw new Error("Temperature must be a number.")
         }
-
-        currentMode = mode;
-        currentTemperature = temperature;
+        this.currentTemperature = temperature;
     }
 
     CreateModel(modelName, setCurrentModel)
@@ -375,7 +373,6 @@ class ACCloner
         })
     }
 }
-
 
 module.exports = {
     ACCloner: ACCloner,
