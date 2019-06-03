@@ -24,7 +24,9 @@ let ACSchema = new mongoose.Schema({
     name: {
         type : String,
         unique : true,
-        required : true,        
+        required : true,  
+        lowercase: true, 
+        trim: true      
     },
     commands: [command]
 })
@@ -48,9 +50,5 @@ let ACSchema = new mongoose.Schema({
  * @property {function} save
 */
 
-/**
- * @type {ACDocument}
- */
-let abc = {}
 
 module.exports = mongoose.model("ac_commands", ACSchema);

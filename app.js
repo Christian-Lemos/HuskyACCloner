@@ -6,6 +6,13 @@ const lodash = require('lodash')
 
 const ACCommands = require('./models/ACCommands');
 
+
+/**
+ * @callback SocketConnectionCallback
+ * @param {net.Socket} socket
+ * @param {boolean} connected
+*/
+
 /**
  * Callback for listening observers
  * 
@@ -28,6 +35,9 @@ const ACCommands = require('./models/ACCommands');
 */
 
 
+
+
+
 /**
  * Calls all the IRCallbacks and removes nulls
  * @param {ACCloner} cloner
@@ -36,6 +46,8 @@ const ACCommands = require('./models/ACCommands');
  * @param {Number} output 
  * @param {String} encodedSignal 
  */
+
+
 function CallIRCallbacks(cloner, document, mode, output, encodedSignal)
 {
     lodash.remove(cloner.IRCallbacks, (callback) =>
@@ -144,6 +156,11 @@ class ACCloner
         */
         this.ListenCallbacks = new Array();
 
+        /**
+         * @type {Array.<SocketConnectionCallback>}
+         */
+        this.SocketConnectionCallbacks = new Array();
+
         mongoose.connect(mongoURI,
         {
             useNewUrlParser: true,
@@ -158,16 +175,41 @@ class ACCloner
                 {
                     this.irSocket = socket;
 
+                    this.irSocket.on('close', () => {
+                        this.irSocket = null;
+                        lodash.forEach(this.SocketConnectionCallbacks, (callback) => {
+                            try
+                            {
+                                callback(this.irSocket, false)
+                            }
+                            catch(err)
+                            {
+                                console.err(err)
+                            }
+                        })
+                    })
+
+                    lodash.forEach(this.SocketConnectionCallbacks, (callback) => {
+                        try
+                        {
+                            callback(this.irSocket, true)
+                        }
+                        catch(err)
+                        {
+                            console.err(err)
+                        }
+                    })
+                    
                     socket.on('data', (buffer) =>
                     {
                         let irEncodedSignal = String(buffer);
-
                         let update = this.currentMode != null && this.currentTemperature != null && this.currentModel != null;
+                        
                         if (update)
                         {
                             let command = lodash.find(this.currentModel.commands, (command) =>
                             {
-                                return command.mode == currentMode;
+                                return command.mode == this.currentMode;
                             })
 
                             if (command != null)
@@ -203,10 +245,11 @@ class ACCloner
                                 });
                             }
 
-                            this.SaveCurrentModel();
+                           // this.SaveCurrentModel();
+                            CallIRCallbacks(this, this.currentModel, this.currentMode, this.currentTemperature, irEncodedSignal)
                         }
 
-                        CallIRCallbacks(this, this.currentModel, this.currentMode, this.currentTemperature, irEncodedSignal)
+                        
                         socket.write(String(update ? '1' : '0'));
                     });
                 }
@@ -221,15 +264,34 @@ class ACCloner
             
         });
     }
-
+    
     StartListening()
     {
-        this.server.listen(this.listeningPort, ip.address());
-        this.server.on('listening', () =>
+        let listen = () => 
         {
-           
-           CallListenCallbacks(this, true);
-        })
+            this.server.listen(this.listeningPort, ip.address());
+            this.server.on('listening', () =>
+            {
+                CallListenCallbacks(this, true);
+            })
+        }
+
+    
+        if(this.isReady)
+        {
+            listen();
+        }
+        else
+        {
+            let cloner = this;
+            let callback = function() {
+                lodash.remove(cloner.ReadyCallbacks, (c) => {
+                    return c == callback;
+                })
+                listen();
+            }
+            this.OnReady(true, callback);
+        }
     }
 
     StopListening()
@@ -253,10 +315,23 @@ class ACCloner
         {
             callback();
         }
-        else
+
+        this.ReadyCallbacks.push(callback);
+        
+    }
+
+    /**
+     * 
+     * @param {boolean} force 
+     * @param {SocketConnectionCallback} callback 
+     */
+    OnSocketConnection(force, callback)
+    {
+        if(force && this.irSocket != null)
         {
-            this.ReadyCallbacks.push(callback);
+            callback(this.irSocket)
         }
+        this.SocketConnectionCallbacks.push(callback)
     }
 
     /**
@@ -286,17 +361,27 @@ class ACCloner
     {
         return new Promise((resolve, reject) =>
         {
-            ACCommands.findById(id, (err, document) =>
+            if(!mongoose.Types.ObjectId.isValid(id))
             {
-                if (err)
+                reject(new Error("Id is not valid."))
+            }
+            else
+            {
+                ACCommands.findById(id, (err, document) =>
                 {
-                    reject(err);
-                }
-                else
-                {
-                    resolve(document);
-                }
-            })
+                    if (err)
+                    {
+                        reject(err);
+                    }
+                    else
+                    {
+                        this.currentModel = document;
+                        resolve(document);
+                    }
+                })
+            }
+
+            
         })
     }
 
@@ -306,7 +391,7 @@ class ACCloner
         {
             ACCommands.findOne((
             {
-                modelName: name
+                name : name
             }), (err, document) =>
             {
                 if (err)
@@ -315,6 +400,7 @@ class ACCloner
                 }
                 else
                 {
+                    this.currentModel = document;
                     resolve(document);
                 }
             })
