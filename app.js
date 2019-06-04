@@ -35,9 +35,6 @@ const ACCommands = require('./models/ACCommands');
 */
 
 
-
-
-
 /**
  * Calls all the IRCallbacks and removes nulls
  * @param {ACCloner} cloner
@@ -175,7 +172,7 @@ class ACCloner
                 {
                     this.irSocket = socket;
 
-                    this.irSocket.on('close', () => {
+                    let close = () => {
                         this.irSocket = null;
                         lodash.forEach(this.SocketConnectionCallbacks, (callback) => {
                             try
@@ -187,6 +184,18 @@ class ACCloner
                                 console.err(err)
                             }
                         })
+                    }
+                    this.irSocket.on('close', () => {
+                        close();
+                    })
+                    this.irSocket.on('end', () => {
+                        close();
+                    })
+                    this.irSocket.on('timeout', () => {
+                        close();
+                    })
+                    this.irSocket.on('error', () => {
+                        close();
                     })
 
                     lodash.forEach(this.SocketConnectionCallbacks, (callback) => {
@@ -429,7 +438,7 @@ class ACCloner
         }
         this.currentTemperature = temperature;
     }
-
+    
     CreateModel(modelName, setCurrentModel)
     {
         return new Promise((resolve, reject) =>
@@ -445,6 +454,7 @@ class ACCloner
             {
                 if (err)
                 {
+                    console.log(err);
                     reject(err)
                 }
                 else
