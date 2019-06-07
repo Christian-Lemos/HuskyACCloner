@@ -1,6 +1,5 @@
 let readline = require('readline')
 let chalk = require('chalk')
-let net = require('net');
 
 const {ACCloner, ACCommands} = require('./../app')
 

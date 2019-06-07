@@ -257,8 +257,6 @@ class ACCloner
                            // this.SaveCurrentModel();
                             CallIRCallbacks(this, this.currentModel, this.currentMode, this.currentTemperature, irEncodedSignal)
                         }
-
-                        
                         socket.write(String(update ? '1' : '0'));
                     });
                 }
