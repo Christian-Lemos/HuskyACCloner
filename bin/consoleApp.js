@@ -9,6 +9,18 @@ const {ACCloner, ACCommands} = require('./../app')
  */
 let cloner;
 
+let helpLog = 
+`
+Use <command> <value>.
+List of possible commands:
+
+    ${chalk.blue("setmode")}: Sets the cloner current mode.
+    ${chalk.blue("setoutput|settemperature")}: Sets the cloner current temperature.
+    ${chalk.blue("select")}: Selects a model by Id or name.
+    ${chalk.blue("create")}: Creates a model. The value is its name.
+    ${chalk.blue("save")}: Saves current selected model.
+    ${chalk.blue("list")}: Gives a list of all models.
+`
 
 const rl = readline.createInterface({
     input : process.stdin,
@@ -81,7 +93,7 @@ let connectedBefore = false;
 
 function SetRLCallbacks()
 {
-    rl.close();
+    //rl.close();
     cloner.OnSocketConnection(true, (socket, connected) => {
         connected ? rl.resume() : rl.close();
 
@@ -212,9 +224,14 @@ function SetRLCallbacks()
                         }
                     })
                 }
+                else if (command == "help")
+                {
+                    console.log(helpLog);
+                }
                 else
                 {
-                    confirm.log(`${chalk.red("Unknown command ")}`)
+                    console.log(`${chalk.red("Unknown command.")}`)
+                    console.log(`Use ${chalk.blue(`"help"`)} for possible commands.`)
                 }
             })
         }
